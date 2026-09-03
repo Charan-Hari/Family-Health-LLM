@@ -1,0 +1,25 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+apps/api/data/
+apps/data/
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+screenshots/recordings/
+
+# Platform and editor files
+.DS_Store
+Thumbs.db
+.vscode/
