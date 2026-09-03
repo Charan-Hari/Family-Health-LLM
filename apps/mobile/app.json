@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Family Health LLM",
+    "slug": "family-health-llm",
+    "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "familyhealthllm",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Family Health LLM to select a prescription photo.",
+          "cameraPermission": "Allow Family Health LLM to photograph a prescription."
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.charanhari.familyhealthllm"
+    },
+    "android": {
+      "package": "com.charanhari.familyhealthllm",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "appEnvironment": "development"
+    }
+  }
+}

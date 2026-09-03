@@ -1,0 +1,40 @@
+name: Deploy web client
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/configure-pages@v5
+      - run: npm ci
+      - run: npx expo export --platform web
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/mobile/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
