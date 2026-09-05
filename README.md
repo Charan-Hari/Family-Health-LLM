@@ -69,3 +69,8 @@ All media below uses synthetic data only. It is generated locally by [`capture-d
 - Before collecting real health data, complete threat modeling, consent flows, authentication, encryption/key management, audit review, clinical validation, and legal/compliance review.
 
 See [deployment guidance](docs/deployment.md), [clinical safety scope](docs/drug-interaction-engine.md), and the [product requirements](docs/prd.md).
+
+
+## GitHub Pages session test mode
+
+The public GitHub Pages site lets visitors add test users, allergies, photos, and medication names for the current browser tab. It makes no API calls and uses no persistent browser storage. All test entries disappear on refresh or when the tab closes. Do not enter real health data.

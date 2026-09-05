@@ -44,6 +44,7 @@ export default function App() {
   const [assistantQuestion, setAssistantQuestion] = useState('');
   const [assistantReply, setAssistantReply] = useState('');
   const [isAssistantLoading, setIsAssistantLoading] = useState(false);
+  const [sessionAllergies, setSessionAllergies] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!isStaticDemo) {
@@ -61,7 +62,26 @@ export default function App() {
 
   async function addFamilyMember() {
     if (isStaticDemo) {
-      setErrorMessage('This public preview uses synthetic data only. User records cannot be created here.');
+      if (!newMemberName.trim()) {
+        setErrorMessage('Enter a name for this test session.');
+        return;
+      }
+      const member: FamilyMember = {
+        id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        display_name: newMemberName.trim(),
+        relationship: 'family',
+      };
+      setMembers((current) => [member, ...current]);
+      setSelectedMember(member);
+      if (allergyName.trim()) {
+        setSessionAllergies((current) => ({
+          ...current,
+          [member.id]: [allergyName.trim()],
+        }));
+      }
+      setNewMemberName('');
+      setAllergyName('');
+      setErrorMessage('');
       return;
     }
     if (!newMemberName.trim()) {
@@ -93,10 +113,6 @@ export default function App() {
   }
 
   async function choosePrescription(source: 'camera' | 'library') {
-    if (isStaticDemo) {
-      setErrorMessage('Prescription capture is disabled in the public synthetic preview.');
-      return;
-    }
     const permission =
       source === 'camera'
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -174,6 +190,10 @@ export default function App() {
     setErrorMessage('');
     setIsAssistantLoading(true);
     try {
+      if (isStaticDemo) {
+        setAssistantReply(createSessionSummary(selectedMember.display_name, sessionAllergies[selectedMember.id] ?? []));
+        return;
+      }
       await streamRecordAssistantReply(selectedMember.id, assistantQuestion.trim(), (content) => {
         setAssistantReply((current) => current + content);
       });
@@ -503,6 +523,35 @@ function Result({
       </Pressable>
     </>
   );
+}
+
+
+function screenSessionMedication(medicationName: string, allergies: string[]): SafetyAlert[] {
+  const medication = medicationName.trim().toLowerCase();
+  const hasSulfaAllergy = allergies.some((allergy) =>
+    ['sulfa', 'sulfonamide'].some((term) => allergy.toLowerCase().includes(term)),
+  );
+  const isSulfaMedication = ['bactrim', 'sulfamethoxazole'].some((term) => medication.includes(term));
+
+  if (hasSulfaAllergy && isSulfaMedication) {
+    return [{
+      id: 'session-sulfa-allergy',
+      severity: 'critical',
+      title: 'Potential documented allergy match',
+      explanation: `This browser session lists a sulfa allergy and the candidate is ${medicationName.trim()}.`,
+      evidence_source: 'Session-only test entry; clinician verification required',
+      recommended_action: 'Do not start this medication until a clinician or pharmacist reviews the allergy history.',
+      medication_names: [medicationName.trim()],
+    }];
+  }
+  return [];
+}
+
+function createSessionSummary(displayName: string, allergies: string[]): string {
+  if (allergies.length) {
+    return `This session for ${displayName} lists: ${allergies.join(', ')}. This is a local test entry, not a confirmed medical record. Confirm health information with a qualified clinician or pharmacist.`;
+  }
+  return `This session for ${displayName} has no allergy entry yet. This local test session does not confirm that any medicine is safe.`;
 }
 
 function toMessage(error: unknown): string {
