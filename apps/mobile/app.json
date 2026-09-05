@@ -45,6 +45,9 @@
         "projectId": "fd11f7dc-2055-4381-ab9a-75b5eb3e9138"
       }
     },
-    "owner": "harywiz"
+    "owner": "harywiz",
+    "experiments": {
+      "baseUrl": "/Family-Health-LLM"
+    }
   }
 }
