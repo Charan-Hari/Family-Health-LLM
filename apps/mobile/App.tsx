@@ -60,6 +60,10 @@ export default function App() {
   }
 
   async function addFamilyMember() {
+    if (isStaticDemo) {
+      setErrorMessage('This public preview uses synthetic data only. User records cannot be created here.');
+      return;
+    }
     if (!newMemberName.trim()) {
       setErrorMessage('Enter a name or a private label for this family member.');
       return;
@@ -89,6 +93,10 @@ export default function App() {
   }
 
   async function choosePrescription(source: 'camera' | 'library') {
+    if (isStaticDemo) {
+      setErrorMessage('Prescription capture is disabled in the public synthetic preview.');
+      return;
+    }
     const permission =
       source === 'camera'
         ? await ImagePicker.requestCameraPermissionsAsync()
