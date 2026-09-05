@@ -31,13 +31,20 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "appEnvironment": "development"
-    }
+      "appEnvironment": "development",
+      "eas": {
+        "projectId": "fd11f7dc-2055-4381-ab9a-75b5eb3e9138"
+      }
+    },
+    "owner": "harywiz"
   }
 }
