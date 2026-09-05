@@ -27,6 +27,7 @@ import {
 } from './src/api';
 
 type Screen = 'home' | 'review' | 'result' | 'assistant';
+const isStaticDemo = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -45,7 +46,9 @@ export default function App() {
   const [isAssistantLoading, setIsAssistantLoading] = useState(false);
 
   useEffect(() => {
-    void loadMembers();
+    if (!isStaticDemo) {
+      void loadMembers();
+    }
   }, []);
 
   async function loadMembers() {

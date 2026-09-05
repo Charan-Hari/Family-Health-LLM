@@ -24,7 +24,8 @@ type StreamEvent = {
   data: Record<string, string>;
 };
 
-const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const apiUrl = configuredApiUrl || 'http://localhost:8000';
 
 export class ApiError extends Error {
   constructor(message: string) {
