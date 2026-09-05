@@ -1,9 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
-  Alert,
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -14,156 +11,243 @@ import {
 } from 'react-native';
 
 type Gender = 'Woman' | 'Man' | 'Prefer not to say';
+type Level = 'urgent' | 'review' | 'info';
+
+type TimelineItem = {
+  id: string;
+  date: string;
+  note: string;
+};
 
 type Profile = {
+  id: string;
   name: string;
   age: string;
   gender: Gender;
-  healthIssues: string[];
+  conditions: string[];
   allergies: string[];
+  medicines: string[];
+  timeline: TimelineItem[];
 };
 
 type Finding = {
-  severity: 'critical' | 'review' | 'clear';
+  level: Level;
   title: string;
   detail: string;
   action: string;
 };
 
-const DISCLAIMER =
-  'Test-session guidance only. This does not diagnose, prescribe, or confirm that a medicine is safe. Ask a qualified clinician or pharmacist.';
+const disclaimer =
+  'This is an advisory health workspace, not medical advice. Do not start, stop, or change a medicine without a qualified clinician or pharmacist.';
 
 export default function App() {
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
   const [gender, setGender] = useState<Gender>('Prefer not to say');
-  const [healthIssues, setHealthIssues] = useState('');
+  const [conditions, setConditions] = useState('');
   const [allergies, setAllergies] = useState('');
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [medicine, setMedicine] = useState('');
-  const [finding, setFinding] = useState<Finding | null>(null);
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [medicines, setMedicines] = useState('');
+  const [medicineToReview, setMedicineToReview] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventNote, setEventNote] = useState('');
+  const [findings, setFindings] = useState<Finding[]>([]);
   const [message, setMessage] = useState('');
 
-  function saveProfile() {
-    if (!name.trim()) {
-      setMessage('Enter a family member name or test label.');
-      return;
-    }
+  const selected = useMemo(
+    () => profiles.find((profile) => profile.id === selectedId) ?? null,
+    [profiles, selectedId],
+  );
 
-    setProfile({
-      name: name.trim(),
-      age: age.trim(),
-      gender,
-      healthIssues: splitValues(healthIssues),
-      allergies: splitValues(allergies),
-    });
-    setFinding(null);
-    setMessage('');
-  }
-
-  function clearSession() {
+  function resetForm() {
     setName('');
     setAge('');
     setGender('Prefer not to say');
-    setHealthIssues('');
+    setConditions('');
     setAllergies('');
-    setProfile(null);
-    setMedicine('');
-    setFinding(null);
-    setPhotoUri(null);
+    setMedicines('');
+    setMedicineToReview('');
+    setEventDate('');
+    setEventNote('');
+    setFindings([]);
     setMessage('');
   }
 
-  function checkMedicine() {
-    if (!profile) {
-      setMessage('Create the family profile first.');
-      return;
-    }
-    if (!medicine.trim()) {
-      setMessage('Enter a medicine name to check.');
-      return;
-    }
+  function addNewMember() {
+    setSelectedId(null);
+    resetForm();
+  }
 
-    setFinding(screenMedicine(medicine, profile));
+  function selectMember(profile: Profile) {
+    setSelectedId(profile.id);
+    setName(profile.name);
+    setAge(profile.age);
+    setGender(profile.gender);
+    setConditions(profile.conditions.join(', '));
+    setAllergies(profile.allergies.join(', '));
+    setMedicines(profile.medicines.join(', '));
+    setMedicineToReview('');
+    setFindings([]);
     setMessage('');
   }
 
-  async function choosePhoto() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Photo access is used only to preview the selected image in this tab.');
+  function saveProfile() {
+    if (!name.trim()) {
+      setMessage('Enter a family member name before continuing.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
-    });
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
+    const profile: Profile = {
+      id: selected?.id ?? `session-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: name.trim(),
+      age: age.trim(),
+      gender,
+      conditions: splitList(conditions),
+      allergies: splitList(allergies),
+      medicines: splitList(medicines),
+      timeline: selected?.timeline ?? [],
+    };
+
+    setProfiles((current) =>
+      current.some((item) => item.id === profile.id)
+        ? current.map((item) => (item.id === profile.id ? profile : item))
+        : [profile, ...current],
+    );
+    setSelectedId(profile.id);
+    setFindings([]);
+    setMessage('Profile is ready in this private browser session.');
+  }
+
+  function reviewMedicine() {
+    if (!selected) {
+      setMessage('Create or select a family member profile first.');
+      return;
     }
+    if (!medicineToReview.trim()) {
+      setMessage('Enter a medicine name to review.');
+      return;
+    }
+    setFindings(createFindings(medicineToReview, selected));
+    setMessage('');
+  }
+
+  function addTimelineItem() {
+    if (!selected) {
+      setMessage('Save the profile before adding timeline details.');
+      return;
+    }
+    if (!eventNote.trim()) {
+      setMessage('Enter an event or health note.');
+      return;
+    }
+
+    const nextProfile: Profile = {
+      ...selected,
+      timeline: [
+        {
+          id: `event-${Date.now()}`,
+          date: eventDate.trim() || 'Date not entered',
+          note: eventNote.trim(),
+        },
+        ...selected.timeline,
+      ],
+    };
+
+    setProfiles((current) => current.map((item) => (item.id === nextProfile.id ? nextProfile : item)));
+    setEventDate('');
+    setEventNote('');
+    setMessage('Timeline detail added for this session.');
+  }
+
+  function clearSession() {
+    setProfiles([]);
+    setSelectedId(null);
+    resetForm();
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.page}>
         <View style={styles.header}>
           <View>
             <Text style={styles.brand}>Family Health LLM</Text>
-            <Text style={styles.subtitle}>Simple health-history test workspace</Text>
+            <Text style={styles.subtitle}>Your family health workspace</Text>
           </View>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>SESSION ONLY</Text>
+            <Text style={styles.badgeText}>PRIVATE SESSION</Text>
           </View>
         </View>
 
         <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Browser test mode</Text>
+          <Text style={styles.noticeTitle}>Your details stay in this browser tab</Text>
           <Text style={styles.noticeText}>
-            Nothing is uploaded or stored. All details disappear when you refresh or close this tab.
+            Nothing is uploaded or saved. All information is cleared when you refresh or close this page.
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.step}>1. FAMILY MEMBER PROFILE</Text>
-          <Text style={styles.title}>Who are you checking for?</Text>
+        {profiles.length > 0 && (
+          <View style={styles.memberSection}>
+            <View style={styles.sectionTop}>
+              <Text style={styles.section}>FAMILY MEMBERS</Text>
+              <Pressable onPress={addNewMember}>
+                <Text style={styles.link}>Add another</Text>
+              </Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.memberRow}>
+              {profiles.map((profile) => (
+                <Pressable
+                  key={profile.id}
+                  onPress={() => selectMember(profile)}
+                  style={[styles.member, selectedId === profile.id && styles.memberSelected]}
+                >
+                  <Text style={styles.initial}>{profile.name[0]?.toUpperCase()}</Text>
+                  <Text numberOfLines={1} style={styles.memberName}>{profile.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
-          <Text style={styles.label}>Name or private label</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Test Parent"
-            placeholderTextColor="#718096"
-            style={styles.input}
-            autoCapitalize="words"
-            maxLength={80}
-          />
+        <View style={styles.card}>
+          <Text style={styles.section}>1. FAMILY MEMBER PROFILE</Text>
+          <Text style={styles.title}>{selected ? `Update ${selected.name}` : 'Add a family member'}</Text>
+
+          <Field label="Name or private label">
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Parent or Test User"
+              placeholderTextColor="#718096"
+              style={styles.input}
+              autoCapitalize="words"
+            />
+          </Field>
 
           <View style={styles.row}>
-            <View style={styles.ageField}>
-              <Text style={styles.label}>Age</Text>
-              <TextInput
-                value={age}
-                onChangeText={setAge}
-                placeholder="e.g. 62"
-                placeholderTextColor="#718096"
-                style={styles.input}
-                keyboardType="number-pad"
-                maxLength={3}
-              />
+            <View style={styles.ageColumn}>
+              <Field label="Age">
+                <TextInput
+                  value={age}
+                  onChangeText={setAge}
+                  placeholder="62"
+                  placeholderTextColor="#718096"
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+              </Field>
             </View>
-            <View style={styles.genderField}>
+
+            <View style={styles.genderColumn}>
               <Text style={styles.label}>Gender</Text>
               <View style={styles.genderRow}>
                 {(['Woman', 'Man', 'Prefer not to say'] as Gender[]).map((option) => (
                   <Pressable
                     key={option}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: gender === option }}
                     onPress={() => setGender(option)}
-                    style={[styles.genderButton, gender === option && styles.genderButtonSelected]}
+                    style={[styles.genderButton, gender === option && styles.genderSelected]}
                   >
                     <Text style={[styles.genderText, gender === option && styles.genderTextSelected]}>
                       {option === 'Prefer not to say' ? 'Not say' : option}
@@ -174,99 +258,143 @@ export default function App() {
             </View>
           </View>
 
-          <Text style={styles.label}>Past health issues</Text>
-          <TextInput
-            value={healthIssues}
-            onChangeText={setHealthIssues}
-            placeholder="e.g. diabetes, high blood pressure"
-            placeholderTextColor="#718096"
-            style={[styles.input, styles.multiline]}
-            multiline
-            maxLength={300}
-          />
-          <Text style={styles.hint}>Separate entries with commas.</Text>
+          <Field label="Past health issues">
+            <TextInput
+              value={conditions}
+              onChangeText={setConditions}
+              placeholder="e.g. diabetes, high blood pressure, kidney disease"
+              placeholderTextColor="#718096"
+              style={[styles.input, styles.multi]}
+              multiline
+            />
+          </Field>
 
-          <Text style={styles.label}>Allergies or previous reactions</Text>
-          <TextInput
-            value={allergies}
-            onChangeText={setAllergies}
-            placeholder="e.g. sulfa, penicillin, ibuprofen"
-            placeholderTextColor="#718096"
-            style={[styles.input, styles.multiline]}
-            multiline
-            maxLength={300}
-          />
-          <Text style={styles.hint}>Only enter synthetic test data in this public preview.</Text>
+          <Field label="Allergies or previous reactions">
+            <TextInput
+              value={allergies}
+              onChangeText={setAllergies}
+              placeholder="e.g. sulfa, penicillin, ibuprofen"
+              placeholderTextColor="#718096"
+              style={[styles.input, styles.multi]}
+              multiline
+            />
+          </Field>
 
-          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={saveProfile}>
-            <Text style={styles.primaryButtonText}>
-              {profile ? 'Update session profile' : 'Create session profile'}
-            </Text>
+          <Field label="Current medicines">
+            <TextInput
+              value={medicines}
+              onChangeText={setMedicines}
+              placeholder="e.g. warfarin, telmisartan"
+              placeholderTextColor="#718096"
+              style={[styles.input, styles.multi]}
+              multiline
+            />
+          </Field>
+
+          <Text style={styles.hint}>Separate multiple entries with commas.</Text>
+          <Pressable style={styles.primary} onPress={saveProfile}>
+            <Text style={styles.primaryText}>{selected ? 'Save profile changes' : 'Create family profile'}</Text>
           </Pressable>
         </View>
 
-        {profile && (
+        {selected && (
           <>
-            <View style={styles.profileCard}>
-              <View style={styles.profileHeader}>
+            <View style={styles.snapshot}>
+              <View style={styles.sectionTop}>
                 <View>
-                  <Text style={styles.step}>CURRENT SESSION PROFILE</Text>
-                  <Text style={styles.profileName}>{profile.name}</Text>
+                  <Text style={styles.section}>CURRENT HEALTH SNAPSHOT</Text>
+                  <Text style={styles.profileName}>{selected.name}</Text>
                   <Text style={styles.profileMeta}>
-                    {profile.age ? `${profile.age} years` : 'Age not entered'} · {profile.gender}
+                    {selected.age ? `${selected.age} years` : 'Age not entered'} · {selected.gender}
                   </Text>
                 </View>
-                <Pressable accessibilityRole="button" onPress={clearSession}>
-                  <Text style={styles.clearText}>Clear session</Text>
+                <Pressable onPress={clearSession}>
+                  <Text style={styles.clear}>Clear session</Text>
                 </Pressable>
               </View>
-
-              <SummaryRow
-                label="Health history"
-                value={profile.healthIssues.length ? profile.healthIssues.join(', ') : 'None entered'}
-              />
-              <SummaryRow
-                label="Allergies / reactions"
-                value={profile.allergies.length ? profile.allergies.join(', ') : 'None entered'}
-                isAlert={profile.allergies.length > 0}
-              />
+              <Snapshot label="Health history" values={selected.conditions} />
+              <Snapshot label="Allergies / reactions" values={selected.allergies} alert />
+              <Snapshot label="Current medicines" values={selected.medicines} />
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.step}>2. MEDICINE SCREEN</Text>
+              <Text style={styles.section}>2. MEDICINE REVIEW</Text>
               <Text style={styles.title}>What should be reviewed?</Text>
-              <Text style={styles.bodyText}>
-                Enter a medicine name. This browser test uses a small, visible ruleset for allergy matches.
+              <Text style={styles.body}>
+                Compare a medicine with the allergy, health-history, and current-medicine details above.
               </Text>
-
-              <Text style={styles.label}>Medicine name</Text>
-              <TextInput
-                value={medicine}
-                onChangeText={setMedicine}
-                placeholder="e.g. Bactrim or amoxicillin"
-                placeholderTextColor="#718096"
-                style={styles.input}
-                autoCapitalize="words"
-                maxLength={160}
-              />
-
-              <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={checkMedicine}>
-                <Text style={styles.primaryButtonText}>Check against this history</Text>
+              <Field label="Medicine name">
+                <TextInput
+                  value={medicineToReview}
+                  onChangeText={setMedicineToReview}
+                  placeholder="e.g. Bactrim, amoxicillin, ibuprofen"
+                  placeholderTextColor="#718096"
+                  style={styles.input}
+                  autoCapitalize="words"
+                />
+              </Field>
+              <Pressable style={styles.primary} onPress={reviewMedicine}>
+                <Text style={styles.primaryText}>Review against this history</Text>
               </Pressable>
-
-              <Pressable accessibilityRole="button" style={styles.photoButton} onPress={() => void choosePhoto()}>
-                <Text style={styles.photoButtonText}>Optional: preview prescription photo</Text>
-              </Pressable>
-
-              {photoUri && (
-                <View style={styles.photoWrap}>
-                  <Image source={{ uri: photoUri }} style={styles.photo} accessibilityLabel="Local prescription preview" />
-                  <Text style={styles.hint}>Preview only. This image is not uploaded or retained.</Text>
-                </View>
-              )}
             </View>
 
-            {finding && <SafetyResult finding={finding} profile={profile} />}
+            {findings.length > 0 && (
+              <View style={styles.findings}>
+                <Text style={styles.section}>WHAT TO REVIEW OR AVOID</Text>
+                {findings.map((finding, index) => (
+                  <FindingCard key={`${finding.title}-${index}`} finding={finding} />
+                ))}
+              </View>
+            )}
+
+            <View style={styles.card}>
+              <Text style={styles.section}>3. HEALTH TIMELINE</Text>
+              <Text style={styles.title}>Keep important context together</Text>
+
+              <Field label="Date (optional)">
+                <TextInput
+                  value={eventDate}
+                  onChangeText={setEventDate}
+                  placeholder="e.g. March 2025"
+                  placeholderTextColor="#718096"
+                  style={styles.input}
+                />
+              </Field>
+
+              <Field label="Health event or note">
+                <TextInput
+                  value={eventNote}
+                  onChangeText={setEventNote}
+                  placeholder="e.g. Started blood pressure medication"
+                  placeholderTextColor="#718096"
+                  style={[styles.input, styles.multi]}
+                  multiline
+                />
+              </Field>
+
+              <Pressable style={styles.outline} onPress={addTimelineItem}>
+                <Text style={styles.outlineText}>Add timeline detail</Text>
+              </Pressable>
+
+              {selected.timeline.map((item) => (
+                <View key={item.id} style={styles.timelineItem}>
+                  <View style={styles.dot} />
+                  <View style={styles.timelineText}>
+                    <Text style={styles.timelineDate}>{item.date}</Text>
+                    <Text style={styles.timelineNote}>{item.note}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.brief}>
+              <Text style={styles.section}>DOCTOR VISIT BRIEF</Text>
+              <Text style={styles.title}>Key details to share</Text>
+              <Text style={styles.briefText}>Conditions: {selected.conditions.join(', ') || 'None entered'}</Text>
+              <Text style={styles.briefText}>Allergies: {selected.allergies.join(', ') || 'None entered'}</Text>
+              <Text style={styles.briefText}>Current medicines: {selected.medicines.join(', ') || 'None entered'}</Text>
+              <Text style={styles.hint}>This brief is available only in the current browser session.</Text>
+            </View>
           </>
         )}
 
@@ -274,185 +402,183 @@ export default function App() {
 
         <View style={styles.footer}>
           <Text style={styles.footerTitle}>Important</Text>
-          <Text style={styles.footerText}>{DISCLAIMER}</Text>
+          <Text style={styles.footerText}>{disclaimer}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SummaryRow({
-  label,
-  value,
-  isAlert = false,
-}: {
-  label: string;
-  value: string;
-  isAlert?: boolean;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={[styles.summaryValue, isAlert && styles.summaryValueAlert]}>{value}</Text>
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      {children}
     </View>
   );
 }
 
-function SafetyResult({ finding, profile }: { finding: Finding; profile: Profile }) {
-  const style =
-    finding.severity === 'critical'
-      ? styles.criticalResult
-      : finding.severity === 'review'
-        ? styles.reviewResult
-        : styles.clearResult;
+function Snapshot({ label, values, alert = false }: { label: string; values: string[]; alert?: boolean }) {
+  return (
+    <View style={styles.snapshotItem}>
+      <Text style={styles.snapshotLabel}>{label}</Text>
+      <Text style={[styles.snapshotValue, alert && values.length > 0 && styles.snapshotAlert]}>
+        {values.join(', ') || 'None entered'}
+      </Text>
+    </View>
+  );
+}
+
+function FindingCard({ finding }: { finding: Finding }) {
+  const background =
+    finding.level === 'urgent' ? styles.urgent :
+    finding.level === 'review' ? styles.review :
+    styles.info;
 
   return (
-    <View style={[styles.resultCard, style]}>
-      <Text style={styles.resultEyebrow}>
-        {finding.severity === 'critical'
-          ? 'PAUSE AND VERIFY'
-          : finding.severity === 'review'
-            ? 'REVIEW WITH A PROFESSIONAL'
-            : 'NO LIMITED-RULE MATCH FOUND'}
+    <View style={[styles.finding, background]}>
+      <Text style={styles.findingLevel}>
+        {finding.level === 'urgent' ? 'PAUSE AND VERIFY' : finding.level === 'review' ? 'REVIEW WITH A PROFESSIONAL' : 'INFORMATION'}
       </Text>
-      <Text style={styles.resultTitle}>{finding.title}</Text>
-      <Text style={styles.resultText}>{finding.detail}</Text>
-
-      {profile.healthIssues.length > 0 && (
-        <View style={styles.historyBox}>
-          <Text style={styles.historyLabel}>SHARE THIS HISTORY</Text>
-          <Text style={styles.historyText}>{profile.healthIssues.join(', ')}</Text>
-        </View>
-      )}
-
-      <View style={styles.actionBox}>
-        <Text style={styles.historyLabel}>NEXT STEP</Text>
+      <Text style={styles.findingTitle}>{finding.title}</Text>
+      <Text style={styles.findingText}>{finding.detail}</Text>
+      <View style={styles.action}>
+        <Text style={styles.actionLabel}>NEXT STEP</Text>
         <Text style={styles.actionText}>{finding.action}</Text>
       </View>
-      <Text style={styles.disclaimer}>{DISCLAIMER}</Text>
     </View>
   );
 }
 
-function splitValues(value: string): string[] {
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+function splitList(value: string): string[] {
+  return value.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 12);
 }
 
-function screenMedicine(medicineName: string, profile: Profile): Finding {
-  const medicine = medicineName.trim().toLowerCase();
-  const allergies = profile.allergies.map((allergy) => allergy.toLowerCase());
+function createFindings(medicineName: string, profile: Profile): Finding[] {
+  const medicine = medicineName.toLowerCase().trim();
+  const allergies = profile.allergies.map((item) => item.toLowerCase());
+  const conditions = profile.conditions.map((item) => item.toLowerCase());
+  const activeMedicines = profile.medicines.map((item) => item.toLowerCase());
+  const results: Finding[] = [];
 
-  const checks = [
-    {
-      allergyTerms: ['sulfa', 'sulfonamide'],
-      medicineTerms: ['bactrim', 'sulfamethoxazole', 'trimethoprim'],
-      label: 'sulfa or sulfonamide',
-    },
-    {
-      allergyTerms: ['penicillin'],
-      medicineTerms: ['amoxicillin', 'ampicillin', 'penicillin'],
-      label: 'penicillin',
-    },
-    {
-      allergyTerms: ['ibuprofen', 'nsaid'],
-      medicineTerms: ['ibuprofen', 'naproxen', 'diclofenac'],
-      label: 'NSAID',
-    },
+  const allergyRules = [
+    { allergies: ['sulfa', 'sulfonamide'], medicines: ['bactrim', 'sulfamethoxazole', 'trimethoprim'], label: 'sulfa or sulfonamide' },
+    { allergies: ['penicillin'], medicines: ['amoxicillin', 'ampicillin', 'penicillin'], label: 'penicillin' },
+    { allergies: ['ibuprofen', 'nsaid'], medicines: ['ibuprofen', 'naproxen', 'diclofenac'], label: 'NSAID' },
   ];
 
-  const match = checks.find(
-    (check) =>
-      allergies.some((allergy) => check.allergyTerms.some((term) => allergy.includes(term))) &&
-      check.medicineTerms.some((term) => medicine.includes(term)),
-  );
+  allergyRules.forEach((rule) => {
+    const allergyMatch = allergies.some((entry) => rule.allergies.some((term) => entry.includes(term)));
+    const medicineMatch = rule.medicines.some((term) => medicine.includes(term));
+    if (allergyMatch && medicineMatch) {
+      results.push({
+        level: 'urgent',
+        title: 'Possible allergy-related conflict',
+        detail: `The entered history includes a ${rule.label} allergy or reaction, and ${medicineName} matches this limited screening rule.`,
+        action: 'Do not make a medication decision from this result. Ask a clinician or pharmacist to review the allergy history.',
+      });
+    }
+  });
 
-  if (match) {
-    return {
-      severity: 'critical',
-      title: 'Possible allergy-related conflict',
-      detail: `This session lists a ${match.label} allergy or reaction, and ${medicineName.trim()} matches this limited browser rule.`,
-      action: 'Do not start or change this medicine based on this app. Contact a clinician or pharmacist to review the allergy history.',
-    };
+  const nsaid = ['ibuprofen', 'naproxen', 'diclofenac'].some((term) => medicine.includes(term));
+  if (nsaid && conditions.some((item) => item.includes('kidney'))) {
+    results.push({
+      level: 'review',
+      title: 'Kidney history should be reviewed',
+      detail: 'The entered health history mentions kidney disease and this medicine matches an NSAID screening category.',
+      action: 'Ask a clinician or pharmacist whether this medicine is appropriate.',
+    });
   }
 
-  if (profile.allergies.length > 0 || profile.healthIssues.length > 0) {
-    return {
-      severity: 'review',
-      title: 'History should be shared before use',
-      detail: `No direct match was found in this small test ruleset for ${medicineName.trim()}. The session still contains health history or allergy entries that a clinician or pharmacist should review.`,
-      action: 'Share the listed history with a qualified clinician or pharmacist before making medication decisions.',
-    };
+  if (nsaid && activeMedicines.some((item) => item.includes('warfarin') || item.includes('blood thinner'))) {
+    results.push({
+      level: 'review',
+      title: 'Current medicine combination needs review',
+      detail: 'The current medicine list includes warfarin or a blood thinner and this medicine matches an NSAID screening category.',
+      action: 'Contact a clinician or pharmacist before combining these medicines.',
+    });
   }
 
-  return {
-    severity: 'clear',
-    title: 'No match in the limited browser rules',
-    detail: `This test did not find a match for ${medicineName.trim()}. It does not mean the medicine is safe or appropriate.`,
-    action: 'Confirm suitability, dose, and interactions with a qualified clinician or pharmacist.',
-  };
+  if (results.length === 0) {
+    results.push({
+      level: 'info',
+      title: 'No match in the limited session rules',
+      detail: `No direct rule matched ${medicineName}. This does not confirm the medicine is safe, suitable, or correctly dosed.`,
+      action: 'Confirm suitability, interactions, and dose with a qualified clinician or pharmacist.',
+    });
+  }
+
+  return results;
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F8FB' },
-  container: { gap: 18, padding: 22, paddingBottom: 44 },
+  safe: { flex: 1, backgroundColor: '#F6F8FB' },
+  page: { gap: 18, padding: 22, paddingBottom: 44 },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  brand: { color: '#132238', fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
+  brand: { color: '#132238', fontSize: 22, fontWeight: '800' },
   subtitle: { color: '#64748B', fontSize: 13, marginTop: 3 },
-  badge: { backgroundColor: '#FFF0CF', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7 },
-  badgeText: { color: '#875B00', fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
+  badge: { backgroundColor: '#E2F5EE', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7 },
+  badgeText: { color: '#167658', fontSize: 10, fontWeight: '900' },
   notice: { backgroundColor: '#FFF7E7', borderColor: '#F0C775', borderRadius: 16, borderWidth: 1, gap: 4, padding: 15 },
-  noticeTitle: { color: '#7A5500', fontSize: 12, fontWeight: '900', letterSpacing: 0.6 },
+  noticeTitle: { color: '#795500', fontSize: 12, fontWeight: '900' },
   noticeText: { color: '#755C27', fontSize: 13, lineHeight: 19 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 22, gap: 10, padding: 20 },
-  step: { color: '#16876A', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  section: { color: '#16876A', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   title: { color: '#162B42', fontSize: 23, fontWeight: '800', lineHeight: 29 },
-  bodyText: { color: '#566477', fontSize: 14, lineHeight: 20, marginBottom: 4 },
-  label: { color: '#34485D', fontSize: 13, fontWeight: '800', marginTop: 5 },
+  body: { color: '#566477', fontSize: 14, lineHeight: 20 },
+  field: { gap: 6, marginTop: 4 },
+  label: { color: '#34485D', fontSize: 13, fontWeight: '800' },
   input: { backgroundColor: '#F5F7FA', borderColor: '#DDE5ED', borderRadius: 12, borderWidth: 1, color: '#132238', fontSize: 15, minHeight: 49, paddingHorizontal: 13, paddingVertical: 12 },
-  multiline: { minHeight: 72, textAlignVertical: 'top' },
+  multi: { minHeight: 70, textAlignVertical: 'top' },
   hint: { color: '#718096', fontSize: 11, lineHeight: 16 },
   row: { flexDirection: 'row', gap: 12 },
-  ageField: { flex: 0.28 },
-  genderField: { flex: 0.72 },
+  ageColumn: { flex: 0.28 },
+  genderColumn: { flex: 0.72, gap: 6, marginTop: 4 },
   genderRow: { flexDirection: 'row', gap: 5 },
-  genderButton: { alignItems: 'center', backgroundColor: '#F5F7FA', borderColor: '#DDE5ED', borderRadius: 10, borderWidth: 1, flex: 1, minHeight: 49, justifyContent: 'center', paddingHorizontal: 4 },
-  genderButtonSelected: { backgroundColor: '#E3F5EF', borderColor: '#16876A' },
-  genderText: { color: '#64748B', fontSize: 10, fontWeight: '700' },
-  genderTextSelected: { color: '#10664F' },
-  primaryButton: { alignItems: 'center', backgroundColor: '#16876A', borderRadius: 13, justifyContent: 'center', marginTop: 8, minHeight: 51, paddingHorizontal: 18 },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  profileCard: { backgroundColor: '#EAF8F3', borderRadius: 22, gap: 12, padding: 20 },
-  profileHeader: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
+  genderButton: { alignItems: 'center', backgroundColor: '#F5F7FA', borderColor: '#DDE5ED', borderRadius: 10, borderWidth: 1, flex: 1, minHeight: 49, justifyContent: 'center' },
+  genderSelected: { backgroundColor: '#E2F5EE', borderColor: '#16876A' },
+  genderText: { color: '#64748B', fontSize: 10, fontWeight: '800' },
+  genderTextSelected: { color: '#126B52' },
+  primary: { alignItems: 'center', backgroundColor: '#16876A', borderRadius: 13, justifyContent: 'center', marginTop: 8, minHeight: 51 },
+  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  memberSection: { gap: 9 },
+  sectionTop: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  link: { color: '#16876A', fontSize: 13, fontWeight: '800' },
+  memberRow: { gap: 9 },
+  member: { alignItems: 'center', backgroundColor: '#FFFFFF', borderColor: '#DDE5ED', borderRadius: 15, borderWidth: 1, gap: 5, padding: 9, width: 82 },
+  memberSelected: { backgroundColor: '#E8F7F1', borderColor: '#16876A', borderWidth: 2 },
+  initial: { backgroundColor: '#CDEEE3', borderRadius: 16, color: '#126B52', fontSize: 14, fontWeight: '900', overflow: 'hidden', paddingHorizontal: 10, paddingVertical: 7 },
+  memberName: { color: '#263B50', fontSize: 11, fontWeight: '800', maxWidth: 60 },
+  snapshot: { backgroundColor: '#EAF8F3', borderRadius: 22, gap: 12, padding: 20 },
   profileName: { color: '#133D49', fontSize: 22, fontWeight: '800', marginTop: 5 },
   profileMeta: { color: '#526C68', fontSize: 13, marginTop: 3 },
-  clearText: { color: '#A43128', fontSize: 12, fontWeight: '800', padding: 4 },
-  summaryRow: { gap: 3 },
-  summaryLabel: { color: '#52716A', fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  summaryValue: { color: '#24473D', fontSize: 14, lineHeight: 20 },
-  summaryValueAlert: { color: '#9E3028', fontWeight: '700' },
-  photoButton: { alignItems: 'center', minHeight: 42, justifyContent: 'center' },
-  photoButtonText: { color: '#16876A', fontSize: 13, fontWeight: '800' },
-  photoWrap: { gap: 7, marginTop: 4 },
-  photo: { borderRadius: 14, height: 180, resizeMode: 'cover', width: '100%' },
-  resultCard: { borderRadius: 22, gap: 12, padding: 21 },
-  criticalResult: { backgroundColor: '#FFF0EF' },
-  reviewResult: { backgroundColor: '#FFF7E7' },
-  clearResult: { backgroundColor: '#EAF8F3' },
-  resultEyebrow: { color: '#A1382E', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  resultTitle: { color: '#3C2929', fontSize: 23, fontWeight: '800', lineHeight: 29 },
-  resultText: { color: '#62433E', fontSize: 14, lineHeight: 21 },
-  historyBox: { backgroundColor: '#FFFFFF', borderRadius: 13, gap: 5, padding: 14 },
-  historyLabel: { color: '#7A5C52', fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  historyText: { color: '#3D312D', fontSize: 14, lineHeight: 20 },
-  actionBox: { backgroundColor: '#FFFFFF', borderRadius: 13, gap: 5, padding: 14 },
+  clear: { color: '#A43128', fontSize: 12, fontWeight: '800', padding: 4 },
+  snapshotItem: { gap: 3 },
+  snapshotLabel: { color: '#52716A', fontSize: 10, fontWeight: '900' },
+  snapshotValue: { color: '#24473D', fontSize: 14, lineHeight: 20 },
+  snapshotAlert: { color: '#9E3028', fontWeight: '700' },
+  findings: { gap: 10 },
+  finding: { borderRadius: 20, gap: 10, padding: 19 },
+  urgent: { backgroundColor: '#FFF0EF' },
+  review: { backgroundColor: '#FFF7E7' },
+  info: { backgroundColor: '#EAF8F3' },
+  findingLevel: { color: '#A1382E', fontSize: 10, fontWeight: '900' },
+  findingTitle: { color: '#3C2929', fontSize: 21, fontWeight: '800', lineHeight: 27 },
+  findingText: { color: '#62433E', fontSize: 14, lineHeight: 21 },
+  action: { backgroundColor: '#FFFFFF', borderRadius: 13, gap: 5, padding: 14 },
+  actionLabel: { color: '#7A5C52', fontSize: 10, fontWeight: '900' },
   actionText: { color: '#3D312D', fontSize: 14, fontWeight: '600', lineHeight: 20 },
-  disclaimer: { color: '#6B7280', fontSize: 11, lineHeight: 16, textAlign: 'center' },
-  message: { color: '#A43128', fontSize: 13, fontWeight: '700', lineHeight: 19, textAlign: 'center' },
-  footer: { backgroundColor: '#EAF0F5', borderRadius: 16, gap: 5, padding: 16 },
-  footerTitle: { color: '#3D5366', fontSize: 12, fontWeight: '900' },
-  footerText: { color: '#53687B', fontSize: 12, lineHeight: 18 },
+  outline: { alignItems: 'center', borderColor: '#16876A', borderRadius: 13, borderWidth: 1, justifyContent: 'center', marginTop: 8, minHeight: 48 },
+  outlineText: { color: '#16876A', fontSize: 14, fontWeight: '800' },
+  timelineItem: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  dot: { backgroundColor: '#16876A', borderRadius: 5, height: 10, marginTop: 5, width: 10 },
+  timelineText: { flex: 1, gap: 2 },
+  timelineDate: { color: '#16876A', fontSize: 11, fontWeight: '900' },
+  timelineNote: { color: '#30475C', fontSize: 14, lineHeight: 20 },
+  brief: { backgroundColor: '#EAF0F5', borderRadius: 22, gap: 8, padding: 20 },
+  briefText: { color: '#3D5366', fontSize: 14, lineHeight: 20 },
+  message: { color: '#A43128', fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  footer: { backgroundColor: '#133D49', borderRadius: 18, gap: 5, padding: 17 },
+  footerTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  footerText: { color: '#D0E2E5', fontSize: 12, lineHeight: 18 },
 });
